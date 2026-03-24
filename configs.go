@@ -328,6 +328,9 @@ type MessageConfig struct {
 	ParseMode             string
 	Entities              []MessageEntity
 	DisableWebPagePreview bool
+	LinkPreviewOptions    *LinkPreviewOptions
+	ReplyParameters       *ReplyParameters
+	MessageEffectID       string
 }
 
 func (config MessageConfig) params() (Params, error) {
@@ -339,13 +342,63 @@ func (config MessageConfig) params() (Params, error) {
 	params.AddNonEmpty("text", config.Text)
 	params.AddBool("disable_web_page_preview", config.DisableWebPagePreview)
 	params.AddNonEmpty("parse_mode", config.ParseMode)
-	err = params.AddInterface("entities", config.Entities)
+	params.AddNonEmpty("message_effect_id", config.MessageEffectID)
 
-	return params, err
+	if err := params.AddInterface("entities", config.Entities); err != nil {
+		return params, err
+	}
+	if err := params.AddInterface("link_preview_options", config.LinkPreviewOptions); err != nil {
+		return params, err
+	}
+	if err := params.AddInterface("reply_parameters", config.ReplyParameters); err != nil {
+		return params, err
+	}
+
+	return params, nil
 }
 
 func (config MessageConfig) method() string {
 	return "sendMessage"
+}
+
+// MessageDraftConfig contains information about a sendMessageDraft request.
+type MessageDraftConfig struct {
+	BaseChat
+	Text               string
+	ParseMode          string
+	Entities           []MessageEntity
+	LinkPreviewOptions *LinkPreviewOptions
+	ReplyParameters    *ReplyParameters
+	MessageEffectID    string
+	AllowPaidBroadcast bool
+}
+
+func (config MessageDraftConfig) params() (Params, error) {
+	params, err := config.BaseChat.params()
+	if err != nil {
+		return params, err
+	}
+
+	params.AddNonEmpty("text", config.Text)
+	params.AddNonEmpty("parse_mode", config.ParseMode)
+	params.AddNonEmpty("message_effect_id", config.MessageEffectID)
+	params.AddBool("allow_paid_broadcast", config.AllowPaidBroadcast)
+
+	if err := params.AddInterface("entities", config.Entities); err != nil {
+		return params, err
+	}
+	if err := params.AddInterface("link_preview_options", config.LinkPreviewOptions); err != nil {
+		return params, err
+	}
+	if err := params.AddInterface("reply_parameters", config.ReplyParameters); err != nil {
+		return params, err
+	}
+
+	return params, nil
+}
+
+func (config MessageDraftConfig) method() string {
+	return "sendMessageDraft"
 }
 
 // ForwardConfig contains information about a ForwardMessage request.
@@ -987,6 +1040,34 @@ func (config ChatActionConfig) params() (Params, error) {
 
 func (config ChatActionConfig) method() string {
 	return "sendChatAction"
+}
+
+// SetMessageReactionConfig contains information about a setMessageReaction request.
+type SetMessageReactionConfig struct {
+	BaseChat
+	MessageID int
+	Reaction  []ReactionType
+	IsBig     bool
+}
+
+func (config SetMessageReactionConfig) params() (Params, error) {
+	params, err := config.BaseChat.params()
+	if err != nil {
+		return params, err
+	}
+
+	params.AddNonZero("message_id", config.MessageID)
+	params.AddBool("is_big", config.IsBig)
+
+	if err := params.AddInterface("reaction", config.Reaction); err != nil {
+		return params, err
+	}
+
+	return params, nil
+}
+
+func (config SetMessageReactionConfig) method() string {
+	return "setMessageReaction"
 }
 
 // EditMessageTextConfig allows you to modify the text in a message.

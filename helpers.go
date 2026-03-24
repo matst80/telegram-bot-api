@@ -985,3 +985,20 @@ func ValidateWebAppData(token, telegramInitData string) (bool, error) {
 
 	return true, nil
 }
+
+// NewSendMessageDraft creates a new message draft.
+func NewSendMessageDraft(chatID int64, text string) MessageDraftConfig {
+	return MessageDraftConfig{
+		BaseChat: BaseChat{ChatID: chatID},
+		Text:     text,
+	}
+}
+
+// NewSetMessageReaction creates a new set message reaction request.
+func NewSetMessageReaction(chatID int64, messageID int, reaction ...ReactionType) SetMessageReactionConfig {
+	return SetMessageReactionConfig{
+		BaseChat:  BaseChat{ChatID: chatID},
+		MessageID: messageID,
+		Reaction:  reaction,
+	}
+}
