@@ -1002,3 +1002,56 @@ func NewSetMessageReaction(chatID int64, messageID int, reaction ...ReactionType
 		Reaction:  reaction,
 	}
 }
+
+// NewMenuButtonCommands creates a new MenuButton for commands.
+func NewMenuButtonCommands() MenuButton {
+	return MenuButton{
+		Type: "commands",
+	}
+}
+
+// NewMenuButtonWebApp creates a new MenuButton for a Web App.
+func NewMenuButtonWebApp(text string, webapp WebAppInfo) MenuButton {
+	return MenuButton{
+		Type:   "web_app",
+		Text:   text,
+		WebApp: &webapp,
+	}
+}
+
+// NewMenuButtonDefault creates a new MenuButton for default behavior.
+func NewMenuButtonDefault() MenuButton {
+	return MenuButton{
+		Type: "default",
+	}
+}
+
+// NewSetChatMenuButton changes the bot's menu button in a private chat.
+func NewSetChatMenuButton(chatID int64, menuButton MenuButton) SetChatMenuButtonConfig {
+	return SetChatMenuButtonConfig{
+		ChatID:     chatID,
+		MenuButton: &menuButton,
+	}
+}
+
+// NewSetChatMenuButtonToChannel changes the bot's menu button in a channel.
+func NewSetChatMenuButtonToChannel(username string, menuButton MenuButton) SetChatMenuButtonConfig {
+	return SetChatMenuButtonConfig{
+		ChannelUsername: username,
+		MenuButton:      &menuButton,
+	}
+}
+
+// NewGetChatMenuButton gets the bot's menu button in a private chat.
+func NewGetChatMenuButton(chatID int64) GetChatMenuButtonConfig {
+	return GetChatMenuButtonConfig{
+		ChatID: chatID,
+	}
+}
+
+// NewGetChatMenuButtonToChannel gets the bot's menu button in a channel.
+func NewGetChatMenuButtonToChannel(username string) GetChatMenuButtonConfig {
+	return GetChatMenuButtonConfig{
+		ChannelUsername: username,
+	}
+}

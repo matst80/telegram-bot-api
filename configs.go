@@ -265,6 +265,7 @@ func (CloseConfig) params() (Params, error) {
 // BaseChat is base type for all chat config types.
 type BaseChat struct {
 	ChatID                   int64 // required
+	MessageThreadID          int
 	ChannelUsername          string
 	ProtectContent           bool
 	ReplyToMessageID         int
@@ -277,6 +278,7 @@ func (chat *BaseChat) params() (Params, error) {
 	params := make(Params)
 
 	params.AddFirstValid("chat_id", chat.ChatID, chat.ChannelUsername)
+	params.AddNonZero("message_thread_id", chat.MessageThreadID)
 	params.AddNonZero("reply_to_message_id", chat.ReplyToMessageID)
 	params.AddBool("disable_notification", chat.DisableNotification)
 	params.AddBool("allow_sending_without_reply", chat.AllowSendingWithoutReply)
@@ -371,6 +373,7 @@ type MessageDraftConfig struct {
 	ReplyParameters    *ReplyParameters
 	MessageEffectID    string
 	AllowPaidBroadcast bool
+	DraftID            int64
 }
 
 func (config MessageDraftConfig) params() (Params, error) {
@@ -383,6 +386,7 @@ func (config MessageDraftConfig) params() (Params, error) {
 	params.AddNonEmpty("parse_mode", config.ParseMode)
 	params.AddNonEmpty("message_effect_id", config.MessageEffectID)
 	params.AddBool("allow_paid_broadcast", config.AllowPaidBroadcast)
+	params.AddNonZero64("draft_id", config.DraftID)
 
 	if err := params.AddInterface("entities", config.Entities); err != nil {
 		return params, err

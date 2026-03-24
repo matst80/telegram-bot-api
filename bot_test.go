@@ -36,6 +36,10 @@ func (t testLogger) Printf(format string, v ...interface{}) {
 
 func getBot(t *testing.T) (*BotAPI, error) {
 	bot, err := NewBotAPI(TestToken)
+	if err != nil {
+		t.Skip("Skipping test that requires a valid Bot API token:", err)
+		return nil, err
+	}
 	bot.Debug = true
 
 	logger := testLogger{t}

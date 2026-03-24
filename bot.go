@@ -747,9 +747,14 @@ func EscapeText(parseMode string, text string) string {
 	return replacer.Replace(text)
 }
 
-// SendMessageDraft sends a message draft and returns the sent Message.
-func (bot *BotAPI) SendMessageDraft(config MessageDraftConfig) (Message, error) {
-	return bot.Send(config)
+// SendMessageDraft sends a message draft and returns true on success.
+func (bot *BotAPI) SendMessageDraft(config MessageDraftConfig) (bool, error) {
+	resp, err := bot.Request(config)
+	if err != nil {
+		return false, err
+	}
+
+	return resp.Ok, nil
 }
 
 // SetMessageReaction sets a message reaction.

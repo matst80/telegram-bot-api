@@ -664,6 +664,21 @@ type Message struct {
 	//
 	// optional
 	WebAppData *WebAppData `json:"web_app_data,omitempty"`
+	// UsersShared service message: users were shared with the bot.
+	//
+	// optional
+	UsersShared *UsersShared `json:"users_shared,omitempty"`
+	// ChatShared service message: a chat was shared with the bot.
+	//
+	// optional
+	ChatShared *ChatShared `json:"chat_shared,omitempty"`
+	// WriteAccessAllowed service message: the user allowed the bot to write
+	// messages after adding it to the attachment menu, summarizing a Web App
+	// from a link, or accepting an explicit request from a Web App sent by
+	// the method requestWriteAccess.
+	//
+	// optional
+	WriteAccessAllowed *WriteAccessAllowed `json:"write_access_allowed,omitempty"`
 	// ReplyMarkup is the Inline keyboard attached to the message.
 	//
 	// optional
@@ -1357,6 +1372,16 @@ type KeyboardButton struct {
 	//
 	// optional
 	WebApp *WebAppInfo `json:"web_app,omitempty"`
+	// RequestUsers if specified, the user will be asked to share users with the
+	// bot when the button is pressed. Available in private chats only.
+	//
+	// optional
+	RequestUsers *KeyboardButtonRequestUsers `json:"request_users,omitempty"`
+	// RequestChat if specified, the user will be asked to share a chat with the
+	// bot when the button is pressed. Available in private chats only.
+	//
+	// optional
+	RequestChat *KeyboardButtonRequestChat `json:"request_chat,omitempty"`
 }
 
 // KeyboardButtonPollType represents type of poll, which is allowed to
@@ -1450,6 +1475,12 @@ type InlineKeyboardButton struct {
 	//
 	// optional
 	SwitchInlineQueryCurrentChat *string `json:"switch_inline_query_current_chat,omitempty"`
+	// SwitchInlineQueryChosenChat if set, pressing the button will prompt the user
+	// to select one of their chats of the specified type, open that chat and
+	// insert the bot's username and the specified inline query in the input field.
+	//
+	// optional
+	SwitchInlineQueryChosenChat *SwitchInlineQueryChosenChat `json:"switch_inline_query_chosen_chat,omitempty"`
 	// CallbackGame description of the game that will be launched when the user presses the button.
 	//
 	// optional
@@ -3754,4 +3785,124 @@ type ReplyParameters struct {
 	QuoteParseMode           string          `json:"quote_parse_mode,omitempty"`
 	QuoteEntities            []MessageEntity `json:"quote_entities,omitempty"`
 	QuotePosition            int             `json:"quote_position,omitempty"`
+}
+
+// UsersShared contains information about the users whose identifiers
+// were shared with the bot using a KeyboardButtonRequestUsers button.
+type UsersShared struct {
+	// RequestID is the identifier of the request.
+	RequestID int `json:"request_id"`
+	// UserIDs are the identifiers of the shared users.
+	UserIDs []int64 `json:"user_ids"`
+}
+
+// ChatShared contains information about the chat whose identifier
+// was shared with the bot using a KeyboardButtonRequestChat button.
+type ChatShared struct {
+	// RequestID is the identifier of the request.
+	RequestID int `json:"request_id"`
+	// ChatID is the identifier of the shared chat.
+	ChatID int64 `json:"chat_id"`
+}
+
+// WriteAccessAllowed contains information about a service message
+// about a user allowing a bot to write messages after adding it
+// to the attachment menu, summarizing a Web App from a link,
+// or accepting an explicit request from a Web App sent by
+// the method requestWriteAccess.
+type WriteAccessAllowed struct {
+	// FromRequest is true if the access was granted after the user
+	// accepted an explicit request from a Web App sent by the
+	// method requestWriteAccess.
+	//
+	// optional
+	FromRequest bool `json:"from_request,omitempty"`
+	// WebAppName is the name of the Web App, if the access was granted
+	// when the Web App was summarized from a link.
+	//
+	// optional
+	WebAppName string `json:"web_app_name,omitempty"`
+	// FromAttachmentMenu is true if the access was granted when the
+	// bot was added to the attachment menu.
+	//
+	// optional
+	FromAttachmentMenu bool `json:"from_attachment_menu,omitempty"`
+}
+
+// KeyboardButtonRequestUsers defines the criteria used to request
+// a suitable user.
+type KeyboardButtonRequestUsers struct {
+	// RequestID is the signed 32-bit identifier of the request.
+	RequestID int `json:"request_id"`
+	// UserIsBot if true, then the bot will request a bot.
+	//
+	// optional
+	UserIsBot *bool `json:"user_is_bot,omitempty"`
+	// UserIsPremium if true, then the bot will request a premium user.
+	//
+	// optional
+	UserIsPremium *bool `json:"user_is_premium,omitempty"`
+	// MaxQuantity is the maximum number of users to be chosen.
+	//
+	// optional
+	MaxQuantity int `json:"max_quantity,omitempty"`
+}
+
+// KeyboardButtonRequestChat defines the criteria used to request
+// a suitable chat.
+type KeyboardButtonRequestChat struct {
+	// RequestID is the signed 32-bit identifier of the request.
+	RequestID int `json:"request_id"`
+	// ChatIsChannel if true, then the bot will request a channel.
+	ChatIsChannel bool `json:"chat_is_channel"`
+	// ChatIsForum if true, then the bot will request a forum.
+	//
+	// optional
+	ChatIsForum *bool `json:"chat_is_forum,omitempty"`
+	// ChatHasUsername if true, then the bot will request a chat with a username.
+	//
+	// optional
+	ChatHasUsername *bool `json:"chat_has_username,omitempty"`
+	// ChatIsCreated if true, then the bot will request a chat created by the user.
+	//
+	// optional
+	ChatIsCreated *bool `json:"chat_is_created,omitempty"`
+	// UserAdministratorRights are the administrator rights required for the user in the chat.
+	//
+	// optional
+	UserAdministratorRights *ChatAdministratorRights `json:"user_administrator_rights,omitempty"`
+	// BotAdministratorRights are the administrator rights required for the bot in the chat.
+	//
+	// optional
+	BotAdministratorRights *ChatAdministratorRights `json:"bot_administrator_rights,omitempty"`
+	// BotIsMember if true, then the bot will request a chat where it is a member.
+	//
+	// optional
+	BotIsMember *bool `json:"bot_is_member,omitempty"`
+}
+
+// SwitchInlineQueryChosenChat represents an inline button that
+// switches the current user to inline mode in a chosen chat,
+// with an optional default inline query.
+type SwitchInlineQueryChosenChat struct {
+	// Query is the default inline query to be inserted in the input field.
+	//
+	// optional
+	Query string `json:"query,omitempty"`
+	// AllowUserChats if true, then the bot will allow choosing private chats with users.
+	//
+	// optional
+	AllowUserChats bool `json:"allow_user_chats,omitempty"`
+	// AllowBotChats if true, then the bot will allow choosing private chats with bots.
+	//
+	// optional
+	AllowBotChats bool `json:"allow_bot_chats,omitempty"`
+	// AllowGroupChats if true, then the bot will allow choosing group chats.
+	//
+	// optional
+	AllowGroupChats bool `json:"allow_group_chats,omitempty"`
+	// AllowChannelChats if true, then the bot will allow choosing channel chats.
+	//
+	// optional
+	AllowChannelChats bool `json:"allow_channel_chats,omitempty"`
 }
