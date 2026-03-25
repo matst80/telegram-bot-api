@@ -2651,3 +2651,64 @@ func prepareInputMediaForFiles(inputMedia []interface{}) []RequestFile {
 
 	return files
 }
+
+// CreateForumTopicConfig contains information about a createForumTopic request.
+type CreateForumTopicConfig struct {
+	BaseChat
+	Name              string
+	IconColor         int
+	IconCustomEmojiID string
+}
+
+func (config CreateForumTopicConfig) params() (Params, error) {
+	params, err := config.BaseChat.params()
+	if err != nil {
+		return params, err
+	}
+
+	params.AddNonEmpty("name", config.Name)
+	params.AddNonZero("icon_color", config.IconColor)
+	params.AddNonEmpty("icon_custom_emoji_id", config.IconCustomEmojiID)
+
+	return params, nil
+}
+
+func (config CreateForumTopicConfig) method() string {
+	return "createForumTopic"
+}
+
+// EditForumTopicConfig contains information about an editForumTopic request.
+type EditForumTopicConfig struct {
+	BaseChat
+	Name              string
+	IconCustomEmojiID string
+}
+
+func (config EditForumTopicConfig) params() (Params, error) {
+	params, err := config.BaseChat.params()
+	if err != nil {
+		return params, err
+	}
+
+	params.AddNonEmpty("name", config.Name)
+	params["icon_custom_emoji_id"] = config.IconCustomEmojiID
+
+	return params, nil
+}
+
+func (config EditForumTopicConfig) method() string {
+	return "editForumTopic"
+}
+
+// CloseForumTopicConfig contains information about a closeForumTopic request.
+type CloseForumTopicConfig struct {
+	BaseChat
+}
+
+func (config CloseForumTopicConfig) params() (Params, error) {
+	return config.BaseChat.params()
+}
+
+func (config CloseForumTopicConfig) method() string {
+	return "closeForumTopic"
+}

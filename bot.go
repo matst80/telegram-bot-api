@@ -767,3 +767,36 @@ func (bot *BotAPI) SetMessageReaction(config SetMessageReactionConfig) (bool, er
 
 	return resp.Ok, nil
 }
+
+// CreateForumTopic creates a new forum topic.
+func (bot *BotAPI) CreateForumTopic(config CreateForumTopicConfig) (ForumTopic, error) {
+	resp, err := bot.Request(config)
+	if err != nil {
+		return ForumTopic{}, err
+	}
+
+	var topic ForumTopic
+	err = json.Unmarshal(resp.Result, &topic)
+
+	return topic, err
+}
+
+// EditForumTopic edits a forum topic.
+func (bot *BotAPI) EditForumTopic(config EditForumTopicConfig) (bool, error) {
+	resp, err := bot.Request(config)
+	if err != nil {
+		return false, err
+	}
+
+	return resp.Ok, nil
+}
+
+// CloseForumTopic closes a forum topic.
+func (bot *BotAPI) CloseForumTopic(config CloseForumTopicConfig) (bool, error) {
+	resp, err := bot.Request(config)
+	if err != nil {
+		return false, err
+	}
+
+	return resp.Ok, nil
+}
