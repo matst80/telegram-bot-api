@@ -3,6 +3,7 @@
 package tgbotapi
 
 import (
+	"context"
 	"encoding/json"
 	"errors"
 	"fmt"
@@ -11,6 +12,7 @@ import (
 	"net/http"
 	"net/url"
 	"strings"
+	"sync"
 	"time"
 )
 
@@ -19,84 +21,41 @@ type HTTPClient interface {
 	Do(req *http.Request) (*http.Response, error)
 }
 
-// BotAPI allows you to interact with the Telegram Bot API.
-type BotAPI struct {
-	Token  string `json:"token"`
-	Debug  bool   `json:"debug"`
-	Buffer int    `json:"buffer"`
-
-	Self            User       `json:"-"`
-	Client          HTTPClient `json:"-"`
-	shutdownChannel chan interface{}
-
+// RequestExecutor is the interface for making requests to the Telegram Bot API.
+type RequestExecutor interface {
+	SetDebug(debug bool)
+	Debug() bool
+	SetApiEndpoint(apiEndpoint string)
+	MakeRequest(endpoint string, params Params) (*APIResponse, error)
+	Request(c Chattable) (*APIResponse, error)
+	UploadFiles(endpoint string, params Params, files []RequestFile) (*APIResponse, error)
+}
+type BaseExecutor struct {
+	token       string
 	apiEndpoint string
+	client      HTTPClient
+	debug       bool
 }
 
-// NewBotAPI creates a new BotAPI instance.
-//
-// It requires a token, provided by @BotFather on Telegram.
-func NewBotAPI(token string) (*BotAPI, error) {
-	return NewBotAPIWithClient(token, APIEndpoint, &http.Client{})
+func (b *BaseExecutor) SetDebug(debug bool) {
+	b.debug = debug
 }
 
-// NewBotAPIWithAPIEndpoint creates a new BotAPI instance
-// and allows you to pass API endpoint.
-//
-// It requires a token, provided by @BotFather on Telegram and API endpoint.
-func NewBotAPIWithAPIEndpoint(token, apiEndpoint string) (*BotAPI, error) {
-	return NewBotAPIWithClient(token, apiEndpoint, &http.Client{})
-}
-
-// NewBotAPIWithClient creates a new BotAPI instance
-// and allows you to pass a http.Client.
-//
-// It requires a token, provided by @BotFather on Telegram and API endpoint.
-func NewBotAPIWithClient(token, apiEndpoint string, client HTTPClient) (*BotAPI, error) {
-	bot := &BotAPI{
-		Token:           token,
-		Client:          client,
-		Buffer:          100,
-		shutdownChannel: make(chan interface{}),
-
-		apiEndpoint: apiEndpoint,
-	}
-
-	self, err := bot.GetMe()
-	if err != nil {
-		return nil, err
-	}
-
-	bot.Self = self
-
-	return bot, nil
+func (b *BaseExecutor) Debug() bool {
+	return b.debug
 }
 
 // SetAPIEndpoint changes the Telegram Bot API endpoint used by the instance.
-func (bot *BotAPI) SetAPIEndpoint(apiEndpoint string) {
-	bot.apiEndpoint = apiEndpoint
+func (b *BaseExecutor) SetApiEndpoint(apiEndpoint string) {
+	b.apiEndpoint = apiEndpoint
 }
 
-func buildParams(in Params) url.Values {
-	if in == nil {
-		return url.Values{}
-	}
-
-	out := url.Values{}
-
-	for key, value := range in {
-		out.Set(key, value)
-	}
-
-	return out
-}
-
-// MakeRequest makes a request to a specific endpoint with our token.
-func (bot *BotAPI) MakeRequest(endpoint string, params Params) (*APIResponse, error) {
-	if bot.Debug {
+func (b *BaseExecutor) MakeRequest(endpoint string, params Params) (*APIResponse, error) {
+	if b.debug {
 		log.Printf("Endpoint: %s, params: %v\n", endpoint, params)
 	}
 
-	method := fmt.Sprintf(bot.apiEndpoint, bot.Token, endpoint)
+	method := fmt.Sprintf(b.apiEndpoint, b.token, endpoint)
 
 	values := buildParams(params)
 
@@ -106,19 +65,19 @@ func (bot *BotAPI) MakeRequest(endpoint string, params Params) (*APIResponse, er
 	}
 	req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
 
-	resp, err := bot.Client.Do(req)
+	resp, err := b.client.Do(req)
 	if err != nil {
 		return nil, err
 	}
 	defer resp.Body.Close()
 
 	var apiResp APIResponse
-	bytes, err := bot.decodeAPIResponse(resp.Body, &apiResp)
+	bytes, err := b.decodeAPIResponse(resp.Body, &apiResp)
 	if err != nil {
 		return &apiResp, err
 	}
 
-	if bot.Debug {
+	if b.debug {
 		log.Printf("Endpoint: %s, response: %s\n", endpoint, string(bytes))
 	}
 
@@ -139,37 +98,35 @@ func (bot *BotAPI) MakeRequest(endpoint string, params Params) (*APIResponse, er
 	return &apiResp, nil
 }
 
-// decodeAPIResponse decode response and return slice of bytes if debug enabled.
-// If debug disabled, just decode http.Response.Body stream to APIResponse struct
-// for efficient memory usage
-func (bot *BotAPI) decodeAPIResponse(responseBody io.Reader, resp *APIResponse) ([]byte, error) {
-	if !bot.Debug {
-		dec := json.NewDecoder(responseBody)
-		err := dec.Decode(resp)
-		return nil, err
-	}
-
-	// if debug, read response body
-	data, err := io.ReadAll(responseBody)
+func (b *BaseExecutor) Request(c Chattable) (*APIResponse, error) {
+	params, err := c.params()
 	if err != nil {
 		return nil, err
 	}
 
-	err = json.Unmarshal(data, resp)
-	if err != nil {
-		return nil, err
+	if t, ok := c.(Fileable); ok {
+		files := t.files()
+
+		// If we have files that need to be uploaded, we should delegate the
+		// request to UploadFile.
+		if hasFilesNeedingUpload(files) {
+			return b.UploadFiles(t.method(), params, files)
+		}
+
+		// However, if there are no files to be uploaded, there's likely things
+		// that need to be turned into params instead.
+		for _, file := range files {
+			params[file.Name] = file.Data.SendData()
+		}
 	}
 
-	return data, nil
+	return b.MakeRequest(c.method(), params)
 }
 
-// UploadFiles makes a request to the API with files.
-func (bot *BotAPI) UploadFiles(endpoint string, params Params, files []RequestFile) (*APIResponse, error) {
+func (b *BaseExecutor) UploadFiles(endpoint string, params Params, files []RequestFile) (*APIResponse, error) {
 	r, w := io.Pipe()
 	m := multipart.NewWriter(w)
 
-	// This code modified from the very helpful @HirbodBehnam
-	// https://github.com/go-telegram-bot-api/telegram-bot-api/issues/354#issuecomment-663856473
 	go func() {
 		defer w.Close()
 		defer m.Close()
@@ -217,11 +174,11 @@ func (bot *BotAPI) UploadFiles(endpoint string, params Params, files []RequestFi
 		}
 	}()
 
-	if bot.Debug {
+	if b.debug {
 		log.Printf("Endpoint: %s, params: %v, with %d files\n", endpoint, params, len(files))
 	}
 
-	method := fmt.Sprintf(bot.apiEndpoint, bot.Token, endpoint)
+	method := fmt.Sprintf(b.apiEndpoint, b.token, endpoint)
 
 	req, err := http.NewRequest("POST", method, r)
 	if err != nil {
@@ -230,19 +187,19 @@ func (bot *BotAPI) UploadFiles(endpoint string, params Params, files []RequestFi
 
 	req.Header.Set("Content-Type", m.FormDataContentType())
 
-	resp, err := bot.Client.Do(req)
+	resp, err := b.client.Do(req)
 	if err != nil {
 		return nil, err
 	}
 	defer resp.Body.Close()
 
 	var apiResp APIResponse
-	bytes, err := bot.decodeAPIResponse(resp.Body, &apiResp)
+	bytes, err := b.decodeAPIResponse(resp.Body, &apiResp)
 	if err != nil {
 		return &apiResp, err
 	}
 
-	if bot.Debug {
+	if b.debug {
 		log.Printf("Endpoint: %s, response: %s\n", endpoint, string(bytes))
 	}
 
@@ -260,6 +217,226 @@ func (bot *BotAPI) UploadFiles(endpoint string, params Params, files []RequestFi
 	}
 
 	return &apiResp, nil
+}
+
+func (b *BaseExecutor) decodeAPIResponse(responseBody io.Reader, resp *APIResponse) ([]byte, error) {
+	if !b.debug {
+		dec := json.NewDecoder(responseBody)
+		err := dec.Decode(resp)
+		return nil, err
+	}
+
+	// if debug, read response body
+	data, err := io.ReadAll(responseBody)
+	if err != nil {
+		return nil, err
+	}
+
+	err = json.Unmarshal(data, resp)
+	if err != nil {
+		return nil, err
+	}
+
+	return data, nil
+}
+
+func NewBaseExecutor(token, apiEndpoint string, client HTTPClient, debug bool) *BaseExecutor {
+	return &BaseExecutor{
+		token:       token,
+		apiEndpoint: apiEndpoint,
+		client:      client,
+		debug:       debug,
+	}
+}
+
+func NewApiExecutor(token string) *BaseExecutor {
+	return NewBaseExecutor(token, APIEndpoint, &http.Client{}, false)
+}
+
+// BotAPI allows you to interact with the Telegram Bot API.
+type BotAPI struct {
+	Token           string          `json:"token"`
+	Buffer          int             `json:"buffer"`
+	Self            User            `json:"-"`
+	Executor        RequestExecutor `json:"-"`
+	shutdownChannel chan interface{}
+}
+
+type Listener struct {
+	ctx     context.Context
+	Matcher func(Update) bool
+	Handler func(Update)
+}
+
+// MultipleListenerBotAPI is a thread-scoped BotAPI instance.
+type MultipleListenerBotAPI struct {
+	*BotAPI
+
+	listeners   []*Listener
+	listenersMu sync.RWMutex
+}
+
+// NewMultipleListenerBotAPI creates a new MultipleListenerBotAPI instance.
+func NewMultipleListenerBotAPI(ctx context.Context, bot *BotAPI, timeout int) *MultipleListenerBotAPI {
+	s := &MultipleListenerBotAPI{
+		listeners: make([]*Listener, 0),
+	}
+	updates := bot.GetUpdatesChan(UpdateConfig{
+		Timeout: timeout,
+	})
+
+	go s.run(ctx, updates)
+
+	return s
+}
+
+func (s *MultipleListenerBotAPI) run(ctx context.Context, updates <-chan Update) {
+	for {
+		select {
+		case <-ctx.Done():
+			return
+		case update := <-updates:
+			s.handleUpdate(update)
+		}
+	}
+}
+
+func (s *MultipleListenerBotAPI) handleUpdate(update Update) {
+	s.listenersMu.RLock()
+	defer s.listenersMu.RUnlock()
+	log.Printf("handleUpdate: %v", update)
+	for _, listener := range s.listeners {
+		if listener.Matcher(update) {
+			go listener.Handler(update)
+		}
+	}
+}
+
+// AddListener adds a listener to the session.
+func (s *MultipleListenerBotAPI) AddListener(ctx context.Context, matcher func(Update) bool, handler func(Update)) *Listener {
+	s.listenersMu.Lock()
+	defer s.listenersMu.Unlock()
+
+	l := &Listener{
+		ctx:     ctx,
+		Matcher: matcher,
+		Handler: handler,
+	}
+
+	s.listeners = append(s.listeners, l)
+
+	return l
+}
+
+// RemoveListener removes a listener from the session.
+func (s *MultipleListenerBotAPI) RemoveListener(l *Listener) {
+	s.listenersMu.Lock()
+	defer s.listenersMu.Unlock()
+
+	for i, listener := range s.listeners {
+		if listener == l {
+			s.listeners = append(s.listeners[:i], s.listeners[i+1:]...)
+			return
+		}
+	}
+}
+
+// NewBotAPI creates a new BotAPI instance.
+//
+// It requires a token, provided by @BotFather on Telegram.
+func NewBotAPI(token string) (*BotAPI, error) {
+	return NewBotAPIWithClient(NewBaseExecutor(token, APIEndpoint, &http.Client{}, false))
+}
+
+// NewBotAPIWithAPIEndpoint creates a new BotAPI instance
+// and allows you to pass API endpoint.
+//
+// It requires a token, provided by @BotFather on Telegram and API endpoint.
+func NewBotAPIWithAPIEndpoint(token, apiEndpoint string) (*BotAPI, error) {
+	return NewBotAPIWithClient(NewBaseExecutor(token, apiEndpoint, &http.Client{}, false))
+}
+
+// NewBotAPIWithClient creates a new BotAPI instance
+// and allows you to pass a http.Client.
+//
+// It requires a token, provided by @BotFather on Telegram and API endpoint.
+func NewBotAPIWithClient(executor RequestExecutor) (*BotAPI, error) {
+	bot := &BotAPI{
+		Executor:        executor,
+		Buffer:          100,
+		shutdownChannel: make(chan interface{}),
+	}
+
+	self, err := bot.GetMe()
+	if err != nil {
+		return nil, err
+	}
+
+	bot.Self = self
+
+	return bot, nil
+}
+
+// WithExecutor returns a new BotAPI instance with the given executor.
+func (bot *BotAPI) WithExecutor(executor RequestExecutor) *BotAPI {
+	newBot := *bot
+	newBot.Executor = executor
+
+	return &newBot
+}
+
+func buildParams(in Params) url.Values {
+	if in == nil {
+		return url.Values{}
+	}
+
+	out := url.Values{}
+
+	for key, value := range in {
+		out.Set(key, value)
+	}
+
+	return out
+}
+
+// MakeRequest makes a request to a specific endpoint with our token.
+func (bot *BotAPI) MakeRequest(endpoint string, params Params) (*APIResponse, error) {
+	if bot.Executor == nil {
+		return nil, errors.New("executor is nil")
+	}
+	return bot.Executor.MakeRequest(endpoint, params)
+}
+
+// decodeAPIResponse decode response and return slice of bytes if debug enabled.
+// If debug disabled, just decode http.Response.Body stream to APIResponse struct
+// for efficient memory usage
+func (bot *BotAPI) decodeAPIResponse(responseBody io.Reader, resp *APIResponse) ([]byte, error) {
+	if bot.Executor == nil || !bot.Executor.Debug() {
+		dec := json.NewDecoder(responseBody)
+		err := dec.Decode(resp)
+		return nil, err
+	}
+
+	// if debug, read response body
+	data, err := io.ReadAll(responseBody)
+	if err != nil {
+		return nil, err
+	}
+
+	err = json.Unmarshal(data, resp)
+	if err != nil {
+		return nil, err
+	}
+
+	return data, nil
+}
+
+// UploadFiles makes a request to the API with files.
+func (bot *BotAPI) UploadFiles(endpoint string, params Params, files []RequestFile) (*APIResponse, error) {
+	if bot.Executor == nil {
+		return nil, errors.New("executor is nil")
+	}
+	return bot.Executor.UploadFiles(endpoint, params, files)
 }
 
 // GetFileDirectURL returns direct URL to file
@@ -311,28 +488,10 @@ func hasFilesNeedingUpload(files []RequestFile) bool {
 
 // Request sends a Chattable to Telegram, and returns the APIResponse.
 func (bot *BotAPI) Request(c Chattable) (*APIResponse, error) {
-	params, err := c.params()
-	if err != nil {
-		return nil, err
+	if bot.Executor == nil {
+		return nil, errors.New("executor is nil")
 	}
-
-	if t, ok := c.(Fileable); ok {
-		files := t.files()
-
-		// If we have files that need to be uploaded, we should delegate the
-		// request to UploadFile.
-		if hasFilesNeedingUpload(files) {
-			return bot.UploadFiles(t.method(), params, files)
-		}
-
-		// However, if there are no files to be uploaded, there's likely things
-		// that need to be turned into params instead.
-		for _, file := range files {
-			params[file.Name] = file.Data.SendData()
-		}
-	}
-
-	return bot.MakeRequest(c.method(), params)
+	return bot.Executor.Request(c)
 }
 
 // Send will send a Chattable item to Telegram and provides the
@@ -462,9 +621,6 @@ func (bot *BotAPI) GetUpdatesChan(config UpdateConfig) UpdatesChannel {
 
 // StopReceivingUpdates stops the go routine which receives updates
 func (bot *BotAPI) StopReceivingUpdates() {
-	if bot.Debug {
-		log.Println("Stopping the update receiver routine...")
-	}
 	close(bot.shutdownChannel)
 }
 
@@ -793,6 +949,109 @@ func (bot *BotAPI) EditForumTopic(config EditForumTopicConfig) (bool, error) {
 
 // CloseForumTopic closes a forum topic.
 func (bot *BotAPI) CloseForumTopic(config CloseForumTopicConfig) (bool, error) {
+	resp, err := bot.Request(config)
+	if err != nil {
+		return false, err
+	}
+
+	return resp.Ok, nil
+}
+
+// DeleteForumTopic deletes a forum topic.
+func (bot *BotAPI) DeleteForumTopic(config DeleteForumTopicConfig) (bool, error) {
+	resp, err := bot.Request(config)
+	if err != nil {
+		return false, err
+	}
+
+	return resp.Ok, nil
+}
+
+// ReopenForumTopic reopens a forum topic.
+func (bot *BotAPI) ReopenForumTopic(config ReopenForumTopicConfig) (bool, error) {
+	resp, err := bot.Request(config)
+	if err != nil {
+		return false, err
+	}
+
+	return resp.Ok, nil
+}
+
+// UnpinAllForumTopicMessages unpins all messages in a forum topic.
+func (bot *BotAPI) UnpinAllForumTopicMessages(config UnpinAllForumTopicMessagesConfig) (bool, error) {
+	resp, err := bot.Request(config)
+	if err != nil {
+		return false, err
+	}
+
+	return resp.Ok, nil
+}
+
+// GetForumTopicIconStickers gets forum topic icon stickers.
+func (bot *BotAPI) GetForumTopicIconStickers(config GetForumTopicIconStickersConfig) ([]Sticker, error) {
+	resp, err := bot.Request(config)
+	if err != nil {
+		return nil, err
+	}
+
+	var stickers []Sticker
+	err = json.Unmarshal(resp.Result, &stickers)
+
+	return stickers, err
+}
+
+// EditGeneralForumTopic edits the general forum topic.
+func (bot *BotAPI) EditGeneralForumTopic(config EditGeneralForumTopicConfig) (bool, error) {
+	resp, err := bot.Request(config)
+	if err != nil {
+		return false, err
+	}
+
+	return resp.Ok, nil
+}
+
+// CloseGeneralForumTopic closes the general forum topic.
+func (bot *BotAPI) CloseGeneralForumTopic(config CloseGeneralForumTopicConfig) (bool, error) {
+	resp, err := bot.Request(config)
+	if err != nil {
+		return false, err
+	}
+
+	return resp.Ok, nil
+}
+
+// ReopenGeneralForumTopic reopens the general forum topic.
+func (bot *BotAPI) ReopenGeneralForumTopic(config ReopenGeneralForumTopicConfig) (bool, error) {
+	resp, err := bot.Request(config)
+	if err != nil {
+		return false, err
+	}
+
+	return resp.Ok, nil
+}
+
+// HideGeneralForumTopic hides the general forum topic.
+func (bot *BotAPI) HideGeneralForumTopic(config HideGeneralForumTopicConfig) (bool, error) {
+	resp, err := bot.Request(config)
+	if err != nil {
+		return false, err
+	}
+
+	return resp.Ok, nil
+}
+
+// UnhideGeneralForumTopic unhides the general forum topic.
+func (bot *BotAPI) UnhideGeneralForumTopic(config UnhideGeneralForumTopicConfig) (bool, error) {
+	resp, err := bot.Request(config)
+	if err != nil {
+		return false, err
+	}
+
+	return resp.Ok, nil
+}
+
+// UnpinAllGeneralForumTopicMessages unpins all messages in the general forum topic.
+func (bot *BotAPI) UnpinAllGeneralForumTopicMessages(config UnpinAllGeneralForumTopicMessagesConfig) (bool, error) {
 	resp, err := bot.Request(config)
 	if err != nil {
 		return false, err

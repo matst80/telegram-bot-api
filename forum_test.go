@@ -50,3 +50,46 @@ func TestCloseForumTopic(t *testing.T) {
 		t.Error(err)
 	}
 }
+
+func TestReopenForumTopic(t *testing.T) {
+	bot, _ := getBot(t)
+
+	cfg := ReopenForumTopicConfig{
+		BaseChat: BaseChat{
+			ChatID:          SupergroupChatID,
+			MessageThreadID: 1, // Dummy thread ID
+		},
+	}
+
+	_, err := bot.ReopenForumTopic(cfg)
+	if err != nil {
+		t.Error(err)
+	}
+}
+
+func TestEditGeneralForumTopic(t *testing.T) {
+	bot, _ := getBot(t)
+
+	cfg := EditGeneralForumTopicConfig{
+		ChatID: SupergroupChatID,
+		Name:   "General Topic New Name",
+	}
+
+	_, err := bot.EditGeneralForumTopic(cfg)
+	if err != nil {
+		t.Error(err)
+	}
+}
+
+func TestCloseGeneralForumTopic(t *testing.T) {
+	bot, _ := getBot(t)
+
+	cfg := CloseGeneralForumTopicConfig{
+		ChatID: SupergroupChatID,
+	}
+
+	_, err := bot.CloseGeneralForumTopic(cfg)
+	if err != nil {
+		t.Error(err)
+	}
+}

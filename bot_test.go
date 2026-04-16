@@ -40,7 +40,7 @@ func getBot(t *testing.T) (*BotAPI, error) {
 		t.Skip("Skipping test that requires a valid Bot API token:", err)
 		return nil, err
 	}
-	bot.Debug = true
+	bot.Executor.SetDebug(true)
 
 	logger := testLogger{t}
 	SetLogger(logger)
@@ -681,7 +681,7 @@ func ExampleNewBotAPI() {
 		panic(err)
 	}
 
-	bot.Debug = true
+	bot.Executor.SetDebug(true)
 
 	log.Printf("Authorized on account %s", bot.Self.UserName)
 
@@ -715,7 +715,7 @@ func ExampleNewWebhook() {
 		panic(err)
 	}
 
-	bot.Debug = true
+	bot.Executor.SetDebug(true)
 
 	log.Printf("Authorized on account %s", bot.Self.UserName)
 
@@ -755,7 +755,7 @@ func ExampleBotAPI_HandleUpdate() {
 		panic(err)
 	}
 
-	bot.Debug = true
+	bot.Executor.SetDebug(true)
 
 	log.Printf("Authorized on account %s", bot.Self.UserName)
 

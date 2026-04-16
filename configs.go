@@ -2712,3 +2712,164 @@ func (config CloseForumTopicConfig) params() (Params, error) {
 func (config CloseForumTopicConfig) method() string {
 	return "closeForumTopic"
 }
+
+// DeleteForumTopicConfig contains information about a deleteForumTopic request.
+type DeleteForumTopicConfig struct {
+	BaseChat
+}
+
+func (config DeleteForumTopicConfig) params() (Params, error) {
+	return config.BaseChat.params()
+}
+
+func (config DeleteForumTopicConfig) method() string {
+	return "deleteForumTopic"
+}
+
+// ReopenForumTopicConfig contains information about a reopenForumTopic request.
+type ReopenForumTopicConfig struct {
+	BaseChat
+}
+
+func (config ReopenForumTopicConfig) params() (Params, error) {
+	return config.BaseChat.params()
+}
+
+func (config ReopenForumTopicConfig) method() string {
+	return "reopenForumTopic"
+}
+
+// UnpinAllForumTopicMessagesConfig contains information about an unpinAllForumTopicMessages request.
+type UnpinAllForumTopicMessagesConfig struct {
+	BaseChat
+}
+
+func (config UnpinAllForumTopicMessagesConfig) params() (Params, error) {
+	return config.BaseChat.params()
+}
+
+func (config UnpinAllForumTopicMessagesConfig) method() string {
+	return "unpinAllForumTopicMessages"
+}
+
+// GetForumTopicIconStickersConfig contains information about a getForumTopicIconStickers request.
+type GetForumTopicIconStickersConfig struct {
+}
+
+func (config GetForumTopicIconStickersConfig) params() (Params, error) {
+	return make(Params), nil
+}
+
+func (config GetForumTopicIconStickersConfig) method() string {
+	return "getForumTopicIconStickers"
+}
+
+// EditGeneralForumTopicConfig contains information about an editGeneralForumTopic request.
+type EditGeneralForumTopicConfig struct {
+	ChatID          int64
+	ChannelUsername string
+	Name            string
+}
+
+func (config EditGeneralForumTopicConfig) params() (Params, error) {
+	params := make(Params)
+
+	params.AddFirstValid("chat_id", config.ChatID, config.ChannelUsername)
+	params.AddNonEmpty("name", config.Name)
+
+	return params, nil
+}
+
+func (config EditGeneralForumTopicConfig) method() string {
+	return "editGeneralForumTopic"
+}
+
+// CloseGeneralForumTopicConfig contains information about a closeGeneralForumTopic request.
+type CloseGeneralForumTopicConfig struct {
+	ChatID          int64
+	ChannelUsername string
+}
+
+func (config CloseGeneralForumTopicConfig) params() (Params, error) {
+	params := make(Params)
+
+	params.AddFirstValid("chat_id", config.ChatID, config.ChannelUsername)
+
+	return params, nil
+}
+
+func (config CloseGeneralForumTopicConfig) method() string {
+	return "closeGeneralForumTopic"
+}
+
+// ReopenGeneralForumTopicConfig contains information about a reopenGeneralForumTopic request.
+type ReopenGeneralForumTopicConfig struct {
+	ChatID          int64
+	ChannelUsername string
+}
+
+func (config ReopenGeneralForumTopicConfig) params() (Params, error) {
+	params := make(Params)
+
+	params.AddFirstValid("chat_id", config.ChatID, config.ChannelUsername)
+
+	return params, nil
+}
+
+func (config ReopenGeneralForumTopicConfig) method() string {
+	return "reopenGeneralForumTopic"
+}
+
+// HideGeneralForumTopicConfig contains information about a hideGeneralForumTopic request.
+type HideGeneralForumTopicConfig struct {
+	ChatID          int64
+	ChannelUsername string
+}
+
+func (config HideGeneralForumTopicConfig) params() (Params, error) {
+	params := make(Params)
+
+	params.AddFirstValid("chat_id", config.ChatID, config.ChannelUsername)
+
+	return params, nil
+}
+
+func (config HideGeneralForumTopicConfig) method() string {
+	return "hideGeneralForumTopic"
+}
+
+// UnhideGeneralForumTopicConfig contains information about an unhideGeneralForumTopic request.
+type UnhideGeneralForumTopicConfig struct {
+	ChatID          int64
+	ChannelUsername string
+}
+
+func (config UnhideGeneralForumTopicConfig) params() (Params, error) {
+	params := make(Params)
+
+	params.AddFirstValid("chat_id", config.ChatID, config.ChannelUsername)
+
+	return params, nil
+}
+
+func (config UnhideGeneralForumTopicConfig) method() string {
+	return "unhideGeneralForumTopic"
+}
+
+// UnpinAllGeneralForumTopicMessagesConfig contains information about an unpinAllGeneralForumTopicMessages request.
+type UnpinAllGeneralForumTopicMessagesConfig struct {
+	ChatID          int64
+	ChannelUsername string
+}
+
+func (config UnpinAllGeneralForumTopicMessagesConfig) params() (Params, error) {
+	params := make(Params)
+
+	params.AddFirstValid("chat_id", config.ChatID, config.ChannelUsername)
+
+	return params, nil
+}
+
+func (config UnpinAllGeneralForumTopicMessagesConfig) method() string {
+	return "unpinAllGeneralForumTopicMessages"
+}
