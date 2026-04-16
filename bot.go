@@ -27,7 +27,9 @@ type RequestExecutor interface {
 	Debug() bool
 	SetApiEndpoint(apiEndpoint string)
 	MakeRequest(endpoint string, params Params) (*APIResponse, error)
+	MakeRequestWithContext(ctx context.Context, endpoint string, params Params) (*APIResponse, error)
 	Request(c Chattable) (*APIResponse, error)
+	RequestWithContext(ctx context.Context, c Chattable) (*APIResponse, error)
 	UploadFiles(endpoint string, params Params, files []RequestFile) (*APIResponse, error)
 }
 type BaseExecutor struct {
@@ -51,6 +53,10 @@ func (b *BaseExecutor) SetApiEndpoint(apiEndpoint string) {
 }
 
 func (b *BaseExecutor) MakeRequest(endpoint string, params Params) (*APIResponse, error) {
+	return b.MakeRequestWithContext(context.Background(), endpoint, params)
+}
+
+func (b *BaseExecutor) MakeRequestWithContext(ctx context.Context, endpoint string, params Params) (*APIResponse, error) {
 	if b.debug {
 		log.Printf("Endpoint: %s, params: %v\n", endpoint, params)
 	}
@@ -59,7 +65,7 @@ func (b *BaseExecutor) MakeRequest(endpoint string, params Params) (*APIResponse
 
 	values := buildParams(params)
 
-	req, err := http.NewRequest("POST", method, strings.NewReader(values.Encode()))
+	req, err := http.NewRequestWithContext(ctx, "POST", method, strings.NewReader(values.Encode()))
 	if err != nil {
 		return &APIResponse{}, err
 	}
@@ -99,6 +105,10 @@ func (b *BaseExecutor) MakeRequest(endpoint string, params Params) (*APIResponse
 }
 
 func (b *BaseExecutor) Request(c Chattable) (*APIResponse, error) {
+	return b.RequestWithContext(context.Background(), c)
+}
+
+func (b *BaseExecutor) RequestWithContext(ctx context.Context, c Chattable) (*APIResponse, error) {
 	params, err := c.params()
 	if err != nil {
 		return nil, err
@@ -120,7 +130,7 @@ func (b *BaseExecutor) Request(c Chattable) (*APIResponse, error) {
 		}
 	}
 
-	return b.MakeRequest(c.method(), params)
+	return b.MakeRequestWithContext(ctx, c.method(), params)
 }
 
 func (b *BaseExecutor) UploadFiles(endpoint string, params Params, files []RequestFile) (*APIResponse, error) {
@@ -279,15 +289,25 @@ type MultipleListenerBotAPI struct {
 // NewMultipleListenerBotAPI creates a new MultipleListenerBotAPI instance.
 func NewMultipleListenerBotAPI(ctx context.Context, bot *BotAPI, timeout int) *MultipleListenerBotAPI {
 	s := &MultipleListenerBotAPI{
+		BotAPI:    bot,
 		listeners: make([]*Listener, 0),
 	}
-	updates := bot.GetUpdatesChan(UpdateConfig{
+	updates := bot.GetUpdatesChanContext(ctx, UpdateConfig{
 		Timeout: timeout,
 	})
 
 	go s.run(ctx, updates)
 
 	return s
+}
+
+func (s *MultipleListenerBotAPI) Stop() {
+	s.listenersMu.Lock()
+	defer s.listenersMu.Unlock()
+	for _, l := range s.listeners {
+		l.ctx.Done()
+	}
+	s.listeners = make([]*Listener, 0)
 }
 
 func (s *MultipleListenerBotAPI) run(ctx context.Context, updates <-chan Update) {
@@ -335,6 +355,7 @@ func (s *MultipleListenerBotAPI) RemoveListener(l *Listener) {
 
 	for i, listener := range s.listeners {
 		if listener == l {
+			l.ctx.Done()
 			s.listeners = append(s.listeners[:i], s.listeners[i+1:]...)
 			return
 		}
@@ -405,10 +426,15 @@ func buildParams(in Params) url.Values {
 
 // MakeRequest makes a request to a specific endpoint with our token.
 func (bot *BotAPI) MakeRequest(endpoint string, params Params) (*APIResponse, error) {
+	return bot.MakeRequestWithContext(context.Background(), endpoint, params)
+}
+
+// MakeRequestWithContext makes a request to a specific endpoint with our token.
+func (bot *BotAPI) MakeRequestWithContext(ctx context.Context, endpoint string, params Params) (*APIResponse, error) {
 	if bot.Executor == nil {
 		return nil, errors.New("executor is nil")
 	}
-	return bot.Executor.MakeRequest(endpoint, params)
+	return bot.Executor.MakeRequestWithContext(ctx, endpoint, params)
 }
 
 // decodeAPIResponse decode response and return slice of bytes if debug enabled.
@@ -492,10 +518,15 @@ func hasFilesNeedingUpload(files []RequestFile) bool {
 
 // Request sends a Chattable to Telegram, and returns the APIResponse.
 func (bot *BotAPI) Request(c Chattable) (*APIResponse, error) {
+	return bot.RequestWithContext(context.Background(), c)
+}
+
+// RequestWithContext sends a Chattable to Telegram with a context, and returns the APIResponse.
+func (bot *BotAPI) RequestWithContext(ctx context.Context, c Chattable) (*APIResponse, error) {
 	if bot.Executor == nil {
 		return nil, errors.New("executor is nil")
 	}
-	return bot.Executor.Request(c)
+	return bot.Executor.RequestWithContext(ctx, c)
 }
 
 // Send will send a Chattable item to Telegram and provides the
@@ -565,7 +596,12 @@ func (bot *BotAPI) GetFile(config FileConfig) (File, error) {
 // Set Timeout to a large number to reduce requests, so you can get updates
 // instantly instead of having to wait between requests.
 func (bot *BotAPI) GetUpdates(config UpdateConfig) ([]Update, error) {
-	resp, err := bot.Request(config)
+	return bot.GetUpdatesWithContext(context.Background(), config)
+}
+
+// GetUpdatesWithContext fetches updates with a context.
+func (bot *BotAPI) GetUpdatesWithContext(ctx context.Context, config UpdateConfig) ([]Update, error) {
+	resp, err := bot.RequestWithContext(ctx, config)
 	if err != nil {
 		return []Update{}, err
 	}
@@ -592,6 +628,11 @@ func (bot *BotAPI) GetWebhookInfo() (WebhookInfo, error) {
 
 // GetUpdatesChan starts and returns a channel for getting updates.
 func (bot *BotAPI) GetUpdatesChan(config UpdateConfig) UpdatesChannel {
+	return bot.GetUpdatesChanContext(context.Background(), config)
+}
+
+// GetUpdatesChanContext starts and returns a channel for getting updates.
+func (bot *BotAPI) GetUpdatesChanContext(ctx context.Context, config UpdateConfig) UpdatesChannel {
 	ch := make(chan Update, bot.Buffer)
 
 	go func() {
@@ -600,14 +641,27 @@ func (bot *BotAPI) GetUpdatesChan(config UpdateConfig) UpdatesChannel {
 			case <-bot.shutdownChannel:
 				close(ch)
 				return
+			case <-ctx.Done():
+				close(ch)
+				return
 			default:
 			}
 
-			updates, err := bot.GetUpdates(config)
+			updates, err := bot.GetUpdatesWithContext(ctx, config)
 			if err != nil {
+				if err == context.Canceled {
+					return
+				}
 				log.Println(err)
 				log.Println("Failed to get updates, retrying in 3 seconds...")
-				time.Sleep(time.Second * 3)
+				
+				select {
+				case <-bot.shutdownChannel:
+					return
+				case <-ctx.Done():
+					return
+				case <-time.After(time.Second * 3):
+				}
 
 				continue
 			}
