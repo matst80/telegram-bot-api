@@ -341,6 +341,10 @@ func (s *MultipleListenerBotAPI) RemoveListener(l *Listener) {
 	}
 }
 
+func NewBot(executor RequestExecutor) (*BotAPI, error) {
+	return NewBotAPIWithClient(executor)
+}
+
 // NewBotAPI creates a new BotAPI instance.
 //
 // It requires a token, provided by @BotFather on Telegram.
