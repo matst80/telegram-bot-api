@@ -501,12 +501,13 @@ func (bot *BotAPI) Request(c Chattable) (*APIResponse, error) {
 // Send will send a Chattable item to Telegram and provides the
 // returned Message.
 func (bot *BotAPI) Send(c Chattable) (Message, error) {
+	var message Message
+
 	resp, err := bot.Request(c)
 	if err != nil {
-		return Message{}, err
+		return message, err
 	}
 
-	var message Message
 	err = json.Unmarshal(resp.Result, &message)
 
 	return message, err
