@@ -18,6 +18,9 @@ func (m *mockExecutor) Debug() bool {
 }
 
 func (m *mockExecutor) MakeRequest(endpoint string, params Params) (*APIResponse, error) {
+	return m.MakeRequestWithContext(context.Background(), endpoint, params)
+}
+func (m *mockExecutor) MakeRequestWithContext(ctx context.Context, endpoint string, params Params) (*APIResponse, error) {
 	if endpoint == "getMe" {
 		user := User{ID: 1, UserName: "testbot"}
 		data, _ := json.Marshal(user)
@@ -31,8 +34,11 @@ func (m *mockExecutor) MakeRequest(endpoint string, params Params) (*APIResponse
 	return &APIResponse{Ok: true}, nil
 }
 func (m *mockExecutor) Request(c Chattable) (*APIResponse, error) {
+	return m.RequestWithContext(context.Background(), c)
+}
+func (m *mockExecutor) RequestWithContext(ctx context.Context, c Chattable) (*APIResponse, error) {
 	params, _ := c.params()
-	return m.MakeRequest(c.method(), params)
+	return m.MakeRequestWithContext(ctx, c.method(), params)
 }
 func (m *mockExecutor) UploadFiles(endpoint string, params Params, files []RequestFile) (*APIResponse, error) {
 	return &APIResponse{Ok: true}, nil

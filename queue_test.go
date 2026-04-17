@@ -24,6 +24,10 @@ func (m *mockQueueExecutor) Debug() bool {
 func (m *mockQueueExecutor) SetApiEndpoint(apiEndpoint string) {}
 
 func (m *mockQueueExecutor) MakeRequest(endpoint string, params Params) (*APIResponse, error) {
+	return m.MakeRequestWithContext(context.Background(), endpoint, params)
+}
+
+func (m *mockQueueExecutor) MakeRequestWithContext(ctx context.Context, endpoint string, params Params) (*APIResponse, error) {
 	m.mu.Lock()
 	defer m.mu.Unlock()
 	m.makeReqCalls++
@@ -31,6 +35,10 @@ func (m *mockQueueExecutor) MakeRequest(endpoint string, params Params) (*APIRes
 }
 
 func (m *mockQueueExecutor) Request(c Chattable) (*APIResponse, error) {
+	return m.RequestWithContext(context.Background(), c)
+}
+
+func (m *mockQueueExecutor) RequestWithContext(ctx context.Context, c Chattable) (*APIResponse, error) {
 	m.mu.Lock()
 	defer m.mu.Unlock()
 	m.calls++
