@@ -282,15 +282,25 @@ type Listener struct {
 type MultipleListenerBotAPI struct {
 	*BotAPI
 
-	listeners   []*Listener
-	listenersMu sync.RWMutex
+	listeners         []*Listener
+	listenersMu       sync.RWMutex
+	commandHandlers   map[string]CommandHandler
+	commandHandlersMu sync.RWMutex
+}
+
+// CommandHandler defines the interface for bot commands that can be handled eagerly.
+type CommandHandler interface {
+	Command() string
+	Description() string
+	Handle(u Update)
 }
 
 // NewMultipleListenerBotAPI creates a new MultipleListenerBotAPI instance.
 func NewMultipleListenerBotAPI(ctx context.Context, bot *BotAPI, timeout int) *MultipleListenerBotAPI {
 	s := &MultipleListenerBotAPI{
-		BotAPI:    bot,
-		listeners: make([]*Listener, 0),
+		BotAPI:          bot,
+		listeners:       make([]*Listener, 0),
+		commandHandlers: make(map[string]CommandHandler),
 	}
 	updates := bot.GetUpdatesChanContext(ctx, UpdateConfig{
 		Timeout: timeout,
@@ -322,6 +332,20 @@ func (s *MultipleListenerBotAPI) run(ctx context.Context, updates <-chan Update)
 }
 
 func (s *MultipleListenerBotAPI) handleUpdate(update Update) {
+	// First, check for eager command handling
+	if update.Message != nil && update.Message.IsCommand() {
+		cmd := update.Message.Command()
+		s.commandHandlersMu.RLock()
+		handler, ok := s.commandHandlers[strings.ToLower(cmd)]
+		s.commandHandlersMu.RUnlock()
+
+		if ok {
+			log.Printf("handleUpdate: eagerly handling command /%s", cmd)
+			go handler.Handle(update)
+			return // Eager handling: don't broadcast to other listeners
+		}
+	}
+
 	s.listenersMu.RLock()
 	defer s.listenersMu.RUnlock()
 	log.Printf("handleUpdate: %v", update)
@@ -330,6 +354,29 @@ func (s *MultipleListenerBotAPI) handleUpdate(update Update) {
 			go listener.Handler(update)
 		}
 	}
+}
+
+// AddCommandHandler registers a command handler for eager execution.
+func (s *MultipleListenerBotAPI) AddCommandHandler(handler CommandHandler) {
+	s.commandHandlersMu.Lock()
+	defer s.commandHandlersMu.Unlock()
+	s.commandHandlers[strings.ToLower(handler.Command())] = handler
+}
+
+// SyncCommands updates the bot's commands on Telegram based on registered global handlers.
+func (s *MultipleListenerBotAPI) SyncCommands() error {
+	s.commandHandlersMu.RLock()
+	var commands []BotCommand
+	for _, h := range s.commandHandlers {
+		commands = append(commands, BotCommand{
+			Command:     h.Command(),
+			Description: h.Description(),
+		})
+	}
+	s.commandHandlersMu.RUnlock()
+
+	_, err := s.Request(NewSetMyCommands(commands...))
+	return err
 }
 
 // AddListener adds a listener to the session.
