@@ -340,7 +340,7 @@ func (s *MultipleListenerBotAPI) handleUpdate(update Update) {
 		s.commandHandlersMu.RUnlock()
 
 		if ok {
-			log.Printf("handleUpdate: eagerly handling command /%s", cmd)
+			// log.Printf("handleUpdate: eagerly handling command /%s", cmd)
 			go handler.Handle(update)
 			return // Eager handling: don't broadcast to other listeners
 		}
@@ -348,7 +348,7 @@ func (s *MultipleListenerBotAPI) handleUpdate(update Update) {
 
 	s.listenersMu.RLock()
 	defer s.listenersMu.RUnlock()
-	log.Printf("handleUpdate: %v", update)
+	// log.Printf("handleUpdate: %v", update)
 	for _, listener := range s.listeners {
 		if listener.Matcher(update) {
 			go listener.Handler(update)
@@ -701,7 +701,7 @@ func (bot *BotAPI) GetUpdatesChanContext(ctx context.Context, config UpdateConfi
 				}
 				log.Println(err)
 				log.Println("Failed to get updates, retrying in 3 seconds...")
-				
+
 				select {
 				case <-bot.shutdownChannel:
 					return
